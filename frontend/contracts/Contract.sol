@@ -2,165 +2,110 @@
 
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-/** @title Contact for the publication of a jokes */
-contract JokesContract {
-    // contract's owner address
-    address owner;
 
-    // set owner as contract's deployer
-    constructor() {
-        owner = msg.sender;
-    }
-
-    uint internal joke_counter = 0;
-    uint internal category_counter = 0;
+/** @title Contact for the publication of jokes */
+contract JokesContract is Ownable {
+    using Counters for Counters.Counter;
+    Counters.Counter private joke_counter;
+    Counters.Counter private category_counter;
 
     struct Joke {
         string title;
         string content;
-        uint category_id;
+        uint256 category_id;
         address user;
-        uint create_timestamp;
+        uint256 create_timestamp;
     }
 
     address[] public users;
-
-    mapping(uint => Joke) jokes;
-
+    mapping(uint256 => Joke) jokes;
     string[] categories;
 
-    /** @dev checks if a contract caller is an owner of the contract */
-    modifier onlyOwner() {
-        require(msg.sender == owner, "You are not an owner");
-        _;
-    }
-
-    /** @dev adds user to all users list
-     * @param user address of a joke owner
-     */
     function addUser(address user) public {
-        bool new_user = true;
+        require(user != address(0), "Invalid user address");
+        if (users.length == 0) {
+            users.push(user);
+        } else {
+            bool new_user = true;
 
-        for (uint i = 0; i < users.length; i++) {
-            if (users[i] == user) {
-                new_user = false;
+            for (uint256 i = 0; i < users.length; i++) {
+                if (users[i] == user) {
+                    new_user = false;
+                }
+            }
+
+            if (new_user == true) {
+                users.push(user);
             }
         }
-
-        // if user is a new user on the site, save his address
-        if (new_user == true) {
-            users.push(user);
-        }
     }
 
-    function donate(address destination) public payable {
-        payable(destination).transfer(msg.value);
+    function donate(address payable destination) public payable {
+        destination.transfer(msg.value);
     }
 
-    /** @dev checks if user is an owner
-     * @return bool
-     */
-    function isOwner() public view returns (bool) {
-        return msg.sender == owner;
-    }
-
-    /**
-     * @return all users addresses
-     */
     function allUsers() public view returns (address[] memory) {
         return users;
     }
 
-    /** @dev adds a new joke to a list
-     * @param joke_element object of a Joke struct
-     */
-    function addJoke(
-        Joke calldata joke_element
-    ) public {
-        require(
-            msg.sender == joke_element.user,
-            "You are not allowed"
-        );
-        require(joke_counter + 1 <= type(uint256).max, "Counter overflow");
-        require(
-            joke_element.category_id < categories.length,
-            "Invalid category id"
-        );
+    function addJoke(Joke calldata joke_element) public {
+        require(msg.sender == joke_element.user, "You are not allowed");
+        require(joke_counter.current() + 1 > joke_counter.current(), "Counter overflow");
+        require(joke_element.category_id < categories.length, "Invalid category id");
 
         addUser(joke_element.user);
 
-        jokes[joke_counter] = joke_element;
+        jokes[joke_counter.current()] = joke_element;
 
-        joke_counter++;
+        joke_counter.increment();
     }
 
-    /** @dev update an existing site
-     * @param index index of a joke inside a contract
-     * @param joke_element object of a Joke struct
-     */
-    function updateJoke(uint index, Joke calldata joke_element) public {
-        require(index < joke_counter, "Joke index not found");
-
+    function updateJoke(uint256 index, Joke calldata joke_element) public {
+        require(index < joke_counter.current(), "Joke index not found");
         require(msg.sender == jokes[index].user, "You are not allowed");
 
         jokes[index] = joke_element;
     }
 
-    /** @dev adds a new category for jokes, only owners can do this
-     * @param title title of a category
-     */
     function addCategory(string memory title) public onlyOwner {
         categories.push(title);
     }
 
-    /** @dev adds a new category for jokes, only owners can do this
-     * @param index index of a category
-     */
-    function getCategory(uint index) public view returns (string memory) {
+    function getCategory(uint256 index) public view returns (string memory) {
         return categories[index];
     }
 
-    /**
-     * @return all categories
-     */
     function allCategories() public view returns (string[] memory) {
         return categories;
     }
 
-    /** @dev returns all jokes
-     * @return Joke[] array of Joke structs
-     */
     function allJokes() public view returns (Joke[] memory) {
-        Joke[] memory f = new Joke[](joke_counter);
+        Joke[] memory f = new Joke[](joke_counter.current());
 
-        for (uint256 i = 0; i < joke_counter; i++) {
+        for (uint256 i = 0; i < joke_counter.current(); i++) {
             f[i] = jokes[i];
         }
 
         return f;
     }
 
-    /** @dev removes a specific joke by it's index
-     * @param index index of a joke
-     */
-    function removeJoke(uint index) public {
+    function removeJoke(uint256 index) public {
         require(msg.sender == jokes[index].user, "You are not allowed");
 
-        uint last_index = joke_counter - 1;
+        uint256 last_index = joke_counter.current() - 1;
         jokes[index] = jokes[last_index];
         delete jokes[last_index];
 
-        joke_counter--;
+        joke_counter.decrement();
     }
 }
 
 /** @title NFT contract to deal with NFT tickets */
-contract JokeNFT is ERC721, ERC721URIStorage, Ownable {
+contract JokeNFT is ERC721URIStorage, Ownable {
     // nft's counter
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -197,13 +142,13 @@ contract JokeNFT is ERC721, ERC721URIStorage, Ownable {
 
     function _burn(
         uint256 tokenId
-    ) internal override(ERC721, ERC721URIStorage) {
+    ) internal override(ERC721URIStorage) {
         super._burn(tokenId);
     }
 
     function tokenURI(
         uint256 tokenId
-    ) public view override(ERC721, ERC721URIStorage) returns (string memory) {
+    ) public view override(ERC721URIStorage) returns (string memory) {
         return super.tokenURI(tokenId);
     }
 }

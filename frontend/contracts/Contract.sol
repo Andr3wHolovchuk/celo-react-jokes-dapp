@@ -43,20 +43,22 @@ contract JokesContract {
     /** @dev adds user to all users list
      * @param user address of a joke owner
      */
-    function addUser(address user) public {
-        bool new_user = true;
+  function addUser(address user) public {
+    bool new_user = true;
 
-        for (uint i = 0; i < users.length; i++) {
-            if (users[i] == user) {
-                new_user = false;
-            }
-        }
-
-        // if user is a new user on the site, save his address
-        if (new_user == true) {
-            users.push(user);
+    for (uint i = 0; i < users.length; i++) {
+        if (users[i] == user) {
+            new_user = false;
+            break;  // Terminate the loop once a match is found
         }
     }
+
+    // if user is a new user on the site, save his address
+    if (new_user) {
+        users.push(user);
+    }
+}
+
 
     function donate(address destination) public payable {
         payable(destination).transfer(msg.value);
@@ -79,25 +81,29 @@ contract JokesContract {
     /** @dev adds a new joke to a list
      * @param joke_element object of a Joke struct
      */
-    function addJoke(
-        Joke calldata joke_element
-    ) public {
-        require(
-            msg.sender == joke_element.user,
-            "You are not allowed"
-        );
-        require(joke_counter + 1 <= type(uint256).max, "Counter overflow");
+  function addJoke(
+    Joke calldata joke_element
+) public {
+    require(
+        msg.sender == joke_element.user,
+        "You are not allowed"
+    );
+    require(joke_counter + 1 <= type(uint256).max, "Counter overflow");
+
+    addUser(joke_element.user);
+
+    if (categories.length > 0) {
         require(
             joke_element.category_id < categories.length,
             "Invalid category id"
         );
-
-        addUser(joke_element.user);
-
-        jokes[joke_counter] = joke_element;
-
-        joke_counter++;
     }
+
+    jokes[joke_counter] = joke_element;
+
+    joke_counter++;
+}
+
 
     /** @dev update an existing site
      * @param index index of a joke inside a contract
@@ -148,16 +154,21 @@ contract JokesContract {
     /** @dev removes a specific joke by it's index
      * @param index index of a joke
      */
-    function removeJoke(uint index) public {
-        require(msg.sender == jokes[index].user, "You are not allowed");
+    
 
-        uint last_index = joke_counter - 1;
-        jokes[index] = jokes[last_index];
-        delete jokes[last_index];
+function removeJoke(uint index) public {
+    require(msg.sender == jokes[index].user, "You are not allowed");
 
-        joke_counter--;
-    }
+    uint last_index = joke_counter - 1;
+    jokes[index] = jokes[last_index];
+    delete jokes[last_index];
+
+    joke_counter--;
+
+    // Update the index of the moved joke
+    jokes[index].create_timestamp = jokes[last_index].create_timestamp;
 }
+
 
 /** @title NFT contract to deal with NFT tickets */
 contract JokeNFT is ERC721, ERC721URIStorage, Ownable {

@@ -1,6 +1,4 @@
-import { useContractKit } from "@celo-tools/use-contractkit";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { getAddressSpec, getSpec, setDislike, setLike } from "../../utils";
 import { allCategories, allJokes } from "../../utils/joke";
 
@@ -19,8 +17,6 @@ const Index = ({ jokeContract, address }) => {
 
         let temp = [];
 
-        let likes = 0, dislikes = 0;
-
         for (let index in all_jokes) {
             if (parseInt(all_jokes[index].user, 16) !== 0) {
                 const spec = await getSpec(index);
@@ -37,8 +33,6 @@ const Index = ({ jokeContract, address }) => {
                     disliked: address_dislikes ? address_dislikes.includes(parseInt(index)) : false
                 });
 
-                likes += spec.likes;
-                dislikes += spec.dislikes;
             }
         }
         setAllJokesArray(temp);

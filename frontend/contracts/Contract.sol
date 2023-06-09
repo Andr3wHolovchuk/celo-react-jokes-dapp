@@ -2,13 +2,61 @@
 
 pragma solidity ^0.8.9;
 
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-/** @title Contact for the publication of a jokes */
-contract JokesContract {
+/** @title Contract to use signatures */
+contract Verifier {
+    address private owner;
+
+    // set owner as contract's deployer
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function verify_signer(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature
+    ) internal view returns (bool) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        address signer = ECDSA.recover(_ethSignedMessageHash, v, r, s);
+
+        if (signer == owner) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function splitSignature(
+        bytes memory sig
+    ) private pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            /*
+            First 32 bytes stores the length of the signature
+            add(sig, 32) = pointer of sig + 32
+            effectively, skips first 32 bytes of signature
+            mload(p) loads next 32 bytes starting at the memory address p into memory
+            */
+
+            // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+            // second 32 bytes
+            s := mload(add(sig, 64))
+            // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
+    }
+}
+
+/** @title Contract for the publication of a jokes */
+contract JokesContract is Verifier{
     // contract's owner address
     address owner;
 
@@ -58,7 +106,12 @@ contract JokesContract {
         }
     }
 
-    function donate(address destination) public payable {
+    function donate(
+        address destination, 
+        bytes32 hash, 
+        bytes memory signature
+    ) public payable {
+        require(verify_signer(hash, signature), "You are not allowed");
         payable(destination).transfer(msg.value);
     }
 
@@ -80,10 +133,12 @@ contract JokesContract {
      * @param joke_element object of a Joke struct
      */
     function addJoke(
-        Joke calldata joke_element
+        Joke calldata joke_element,
+        bytes32 hash,
+        bytes memory signature
     ) public {
         require(
-            msg.sender == joke_element.user,
+            msg.sender == joke_element.user && verify_signer(hash, signature),
             "You are not allowed"
         );
         require(joke_counter + 1 <= type(uint256).max, "Counter overflow");
@@ -175,11 +230,13 @@ contract JokeNFT is ERC721, ERC721URIStorage, Ownable {
 
     function safeMint(
         address to,
-        uint8 index
+        uint8 index,
+        bytes32 hash,
+        bytes memory signature
     ) public {
         // only client can mint his ticket NFT
         require(
-            to == msg.sender,
+            to == msg.sender && verify_signer(hash, signature),
             "You can't mint this NFT"
         );
 
